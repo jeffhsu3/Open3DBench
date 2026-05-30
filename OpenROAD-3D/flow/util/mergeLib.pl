@@ -1,7 +1,7 @@
 #!/usr/bin/env perl
 
-# This script is sourced from Brown (with slight modifications). It merges
-# several timing libraries into one.
+# This script is sourced from Brown (with modifications). It merges
+# several timing libraries into one, making sure templates are not lost.
 # ------------------------------------------------------------------------------
 
 use strict;
@@ -13,9 +13,18 @@ my $cnt = @ARGV;
 
 if($cnt>0){
   process_header($ARGV[0]);
-  my $file;
+  
+  # Extract and print all unique templates from all files
+  my %templates;
   foreach my $file (@ARGV) {
-      process_cells($file)
+      extract_templates($file, \%templates);
+  }
+  foreach my $name (sort keys %templates) {
+      print $templates{$name};
+  }
+
+  foreach my $file (@ARGV) {
+      process_cells($file);
   }
   print "\n}\n";
 } else {
@@ -31,10 +40,45 @@ sub process_header {
       print "library ($sclname) {\n";
       next;
     }
-    last if(/^[\t\s]*cell\s*\(/);
+    last if(/^[\t\s]*(cell|lu_table_template|power_lut_template)\s*\(/);
     print $_;
   }
-  close($fh)
+  close($fh);
+}
+
+sub extract_templates {
+  my $filename = shift;
+  my $templates_ref = shift;
+  open(my $fh, '<', $filename) or die "Could not open file $filename $!";
+  my $in_template = 0;
+  my $template_name = "";
+  my $template_content = "";
+  my $brace_depth = 0;
+  while (my $line = <$fh>) {
+    if (!$in_template) {
+      if ($line =~ /^\s*(lu_table_template|power_lut_template)\s*\(\s*([^\)]+)\s*\)/) {
+        $in_template = 1;
+        $template_name = $2;
+        $template_content = $line;
+        $brace_depth = 0;
+        $brace_depth++ while $line =~ /\{/g;
+        $brace_depth-- while $line =~ /\}/g;
+        if ($brace_depth == 0) {
+          $templates_ref->{$template_name} = $template_content;
+          $in_template = 0;
+        }
+      }
+    } else {
+      $template_content .= $line;
+      $brace_depth++ while $line =~ /\{/g;
+      $brace_depth-- while $line =~ /\}/g;
+      if ($brace_depth <= 0) {
+        $templates_ref->{$template_name} = $template_content;
+        $in_template = 0;
+      }
+    }
+  }
+  close($fh);
 }
 
 sub process_cells {
@@ -51,11 +95,11 @@ sub process_cells {
       print "\n$_";
       $flag=1;
     } elsif($flag > 0){
-        $flag++ if(/\{/);
-        $flag-- if(/\}/);
-        #print "...}\n" if($flag==0);
-        print "$_";
+      $flag++ if(/\{/);
+      $flag-- if(/\}/);
+      #print "...}\n" if($flag==0);
+      print "$_";
     }
   }
-  close($fh)
+  close($fh);
 }

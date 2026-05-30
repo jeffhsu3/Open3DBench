@@ -37,4 +37,5 @@ if { [llength $clks] == 0 } {
   }
 }
 
-utl::info "FLW" 11 "Path endpoint count [sta::endpoint_count]"
+catch { utl::info "FLW" 11 "Path endpoint count [sta::endpoint_count]" }
+
